@@ -1,7 +1,9 @@
-# mithril-lynx bindings
+# `@carlos-sweb/lynx-vlc-video-mithril`
 
-Typed `vlcVideo()` factory for `m("vlc-video", attrs)`. Register the native element first.
+Typed `vlcVideo()` for mithril-lynx. Register the native Android Behavior separately (`io.github.carlos-sweb:lynx-vlc-video`) — see [docs/mithril.md](../../docs/mithril.md) and [docs/android-host.md](../../docs/android-host.md).
 
-**Use it:** [docs/mithril.md](../../docs/mithril.md).
+```bash
+npm install @carlos-sweb/lynx-vlc-video-mithril
+```
 
-`VlcVideoPlayer` is a stub and throws. Do not import it for production UI.
+No `postinstall`. `VlcVideoPlayer` is a stub and throws.

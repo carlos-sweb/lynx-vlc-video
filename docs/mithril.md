@@ -1,6 +1,25 @@
 # mithril-lynx
 
-`/packages/mithril` is TypeScript only. It does not ship native code. The host must still register the Android Behavior ([quick start](quick-start.md)).
+npm package: `@carlos-sweb/lynx-vlc-video-mithril`. TypeScript only — no native code and **no `postinstall`**. The host must still register the Android Behavior ([quick start](quick-start.md), [Android host](android-host.md)).
+
+## Install
+
+```bash
+npm install @carlos-sweb/lynx-vlc-video-mithril
+```
+
+Peer: `mithril-runtime` (your mithril-lynx app already has it).
+
+Until the package is on the registry, use a path/workspace dependency on this repo’s `packages/mithril`.
+
+## What the end user installs (two sides)
+
+| Side | Tool | Package |
+|---|---|---|
+| JS / Lynx bundle | npm | `@carlos-sweb/lynx-vlc-video-mithril` → `vlcVideo()` |
+| Android host | Gradle / Maven Central | `io.github.carlos-sweb:lynx-vlc-video:0.1.0` + `addBehaviors(BehaviorGenerator…)` |
+
+npm cannot drop a `.aar` into an Android project. That is why there is no `postinstall` Gradle hook — it would be brittle and surprising. Document the host steps instead.
 
 ## `vlcVideo()`
 
@@ -27,8 +46,17 @@ export function view() {
 
 `VlcVideoProps` lists every public attribute and event. Methods are still `lynx.createSelectorQuery().select("#player").invoke({ method: "play" })` — see [methods](api-methods.md).
 
-The package is not on npm yet. Depend on it by path from this repo, or copy `packages/mithril/src/vlc-video.ts` (`mithril-runtime` peer).
-
 ## `VlcVideoPlayer`
 
 Not implemented. The export throws. Do not use it; use `vlcVideo()` and your own controls.
+
+## Publish (maintainers)
+
+From `packages/mithril`:
+
+```bash
+npm run build
+npm publish --access public
+```
+
+`prepublishOnly` runs the build. Publish the Android library separately (Maven / `include` project) — see [android-host](android-host.md).

@@ -12,7 +12,13 @@ import com.carlossweb.lynxvlcvideo.BehaviorGenerator as VlcVideoBehaviorGenerato
 builder.addBehaviors(VlcVideoBehaviorGenerator.getBehaviors())
 ```
 
-Add the Android library as a local module (it is not on Maven Central yet). If the host also depends on `xelement`, exclude `xelement-animax` — see [Android host](android-host.md).
+Add the Android library:
+
+```kotlin
+implementation("io.github.carlos-sweb:lynx-vlc-video:0.1.0")
+```
+
+(For local `include` of this repo, see [Android host](android-host.md).) If the host also depends on `xelement`, exclude `xelement-animax`.
 
 ## 2. Render and play
 

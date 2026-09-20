@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Wire Maven Central publishing for the Android AAR
+  (`io.github.carlos-sweb:lynx-vlc-video`, vanniktech maven-publish plugin).
+
 - Shared one process-wide `LibVLC` (refcount) across `<vlc-video>` elements;
   each element still owns its own `MediaPlayer`.
 - `mode="queue"`/`"latest"`: `stop` preempts an in-flight `play`/`pause` so

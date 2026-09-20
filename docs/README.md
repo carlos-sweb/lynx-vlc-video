@@ -11,4 +11,4 @@ Use these pages to add the element to an app. Contributor notes (how it is built
 | Handle `playing`, `error`, `timeupdate`, … | [Events](api-events.md) |
 | Fill the black box (`contain` / `cover` / `fill`) | [object-fit](object-fit.md) |
 | Understand `mode="queue"` vs `direct` | [Playback mode](playback-mode.md) |
-| Use the mithril-lynx helper | [mithril](mithril.md) |
+| Use / publish the mithril npm helper | [mithril](mithril.md) |

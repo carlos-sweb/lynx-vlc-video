@@ -1,16 +1,26 @@
 {
   "name": "@carlos-sweb/lynx-vlc-video-mithril",
   "version": "0.1.0",
-  "description": "Typed mithril-lynx bindings for <vlc-video>. The plain, functional wrapper is here; the polished player UI (controls, progress bar, track picker) is pending — see README.",
+  "description": "Typed mithril-lynx bindings for the Lynx <vlc-video> element (libVLC).",
+  "license": "MIT",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -b",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
     "mithril-runtime": "^1.1.0"
@@ -19,5 +29,28 @@
     "@types/mithril": "^2.2.9",
     "typescript": "~5.9.0"
   },
-  "license": "MIT"
+  "keywords": [
+    "lynx",
+    "mithril",
+    "mithril-lynx",
+    "vlc",
+    "libvlc",
+    "video",
+    "hls"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/carlos-sweb/lynx-vlc-video.git",
+    "directory": "packages/mithril"
+  },
+  "homepage": "https://github.com/carlos-sweb/lynx-vlc-video/tree/main/packages/mithril#readme",
+  "bugs": {
+    "url": "https://github.com/carlos-sweb/lynx-vlc-video/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }

@@ -11,6 +11,7 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.kapt")
+    id("com.vanniktech.maven.publish")
 }
 
 android {
@@ -53,4 +54,12 @@ dependencies {
     // working end-to-end on a real device — see /docs/TESTING.md before
     // changing this.
     api("org.videolan.android:libvlc-all:3.6.5")
+}
+
+// Coordinates / POM come from root gradle.properties (GROUP, POM_*, VERSION_NAME).
+// First release: upload with publishToMavenCentral, then click Publish on
+// https://central.sonatype.com/publishing/deployments
+mavenPublishing {
+    publishToMavenCentral(automaticRelease = false)
+    signAllPublications()
 }
