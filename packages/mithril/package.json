@@ -19,5 +19,5 @@
     "@types/mithril": "^2.2.9",
     "typescript": "~5.9.0"
   },
-  "license": "Apache-2.0"
+  "license": "MIT"
 }

@@ -52,7 +52,7 @@ UI) is the one open, tracked piece of work.
 
 ## License
 
-Apache 2.0 — matches [`lynx-family/lynx`](https://github.com/lynx-family/lynx),
-whose `xelement-video` this repo's architecture and Lynx-facing layer are
-directly modeled on (see ARCHITECTURE.md for exactly what's copied in shape
-vs. original).
+MIT. Architecturally modeled on `xelement-video` from
+[`lynx-family/lynx`](https://github.com/lynx-family/lynx) (Apache 2.0) — see
+ARCHITECTURE.md for exactly what's copied in shape vs. original; no source
+from that repo is vendored here.
