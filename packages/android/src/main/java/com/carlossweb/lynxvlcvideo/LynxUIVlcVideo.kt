@@ -231,6 +231,12 @@ open class LynxUIVlcVideo(context: LynxContext, params: Any?) :
     }
 
     private fun dispatchRequest(request: UIMethodRequest) {
+        // stop is a hard reset: do not queue it behind a WaitForEvent play()
+        // that may never fire (stalled IPTV). The host retry in TESTING.md
+        // depends on stop actually reaching libVLC.
+        if (mMode != "direct" && request.method == "stop" && mIsExecuting) {
+            cancelPendingSerialRequests("request canceled by stop")
+        }
         when (mMode) {
             "direct" -> executeDirectRequest(request)
             "latest" -> {

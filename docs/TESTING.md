@@ -79,6 +79,10 @@ play (11:40:00) -> 8s stall -> stop (11:40:08) -> 2s delay -> play (11:40:10)
 -> 8s stall -> "Error tras 3 intentos — sin respuesta tras 8s"
 ```
 
+Native side: with default `mode="queue"`, `stop` now preempts an in-flight
+`play()` that never fired `bindplaying`/`binderror`. Before that, the host
+retry's `stop()` was only queued and never reached libVLC.
+
 Note: `<video>`'s own `src` connects eagerly on mount (ExoPlayer's
 `prepare()` runs as soon as `setSrc` is called, not deferred until `play()`)
 — so if you see BOTH a `<video>` and a `<vlc-video>` retrying and you only
@@ -86,14 +90,18 @@ tapped one, that's very likely this, not a bug: `<video>` started its own,
 independent retry cycle just from being mounted with a `src` pointed at a
 dead stream.
 
-## 5. Known open issue
+## 5. `object-fit` (contain / cover / fill)
 
-`object-fit: contain` (`MediaPlayer.ScaleType.SURFACE_BEST_FIT`) renders
-the video visibly smaller than its container instead of scaling up to fill
-it, on-device. Not yet root-caused — suspected `VLCVideoLayout`
-measure/layout timing, not the `ScaleType` choice itself (the enum and the
-mapping are both correct per libVLC's own source). `cover`/`fill` not yet
-separately verified on-device.
+`VideoHelper.updateVideoSurfaces()` in libvlc-all 3.6.5 swaps the frame's
+width/height when the **Activity** is in portrait, assuming `VLCVideoLayout`
+is fullscreen. An embedded landscape box (e.g. `100% × 220px`) then gets
+contain computed against the swapped size — on the SM-A075M that was a
+`412×232` surface inside a `630×412` box.
+
+Fix: `MediaPlayer.setUseOrientationFromBounds(true)` so portrait is
+`height > width` of the **element**, plus `updateVideoSurfaces()` after
+layout and the first `Vout`. `contain` should touch at least one pair of
+edges; `cover` fills and may crop; `fill` stretches.
 
 ## Reproducing this
 

@@ -7,7 +7,7 @@
 // even though the implementation isn't.
 //
 // Planned props, sketched against what the raw element already exposes
-// (see vlc-video.ts's VlcVideoProps and /docs/SPEC.md):
+// (see vlc-video.ts's VlcVideoProps and docs/api-attributes.md):
 //   - src, loop, muted, autoplay-on-mount
 //   - showControls / controlsTimeout (auto-hide)
 //   - onTrackChange, initial audio/subtitle track selection

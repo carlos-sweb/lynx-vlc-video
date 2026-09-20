@@ -20,6 +20,11 @@ LynxVideoPlayable       <-- the interface that separates "Lynx" from "the
 LibVlcVideoPlayable     <-- the ONLY libVLC-specific file. Everything below
   (this repo's own          this line is swappable for a different engine
    real code)                without touching LynxUIVlcVideo at all.
+       |
+       | acquire/release
+       v
+SharedLibVlc            <-- one process-wide LibVLC (refcount). Each
+                            element still owns its own MediaPlayer.
 ```
 
 This is why adding track selection and `network-caching` only touched two
@@ -56,17 +61,21 @@ builder.addBehaviors(VlcVideoBehaviorGenerator.getBehaviors())
 
 | libVLC `MediaPlayer.Event` | Lynx callback | Note |
 |---|---|---|
-| `Vout` (first one) | `onFirstFrame` | Best-effort — no native "first frame" event, see SPEC.md. |
+| `Vout` (first one) | `onFirstFrame` | Best-effort — no native "first frame" event, see [events](api-events.md). |
 | `Buffering` (0–100%) | `onBuffering` | Converted to ms via `duration * pct/100`; 0 for live/unknown duration. |
 | `Playing` | `onPlaying` | Suppressed once per loop restart (`suppressNextPlayingForLoop`) so looping doesn't re-fire `bindplaying`. |
 | `Paused` | `onPaused` | Suppressed during an internal (non-user) stop, same pattern. |
 | `EndReached` | `onEnded` / `onLooped` + manual restart | libVLC has no native repeat mode used here — looping is done by hand, re-building the `Media` and calling `play()` again, matching how the ExoPlayer-backed `LynxVideoView` also does this manually. |
-| `EncounteredError` | `onError` | No code/message available from libVLC's Java API — see SPEC.md. |
+| `EncounteredError` | `onError` | No code/message available from libVLC's Java API — see [events](api-events.md). |
 | `TimeChanged` | `onTimeUpdate` | |
 
-Volume (`Int` 0–200) and `object-fit` (`MediaPlayer.ScaleType`) are
-converted/mapped at the `LibVlcVideoPlayable` boundary — see that file's own
-header comment for the exact table.
+Volume (`Int` 0–100, 100 = 0 dB unity) and `object-fit` (`MediaPlayer.ScaleType`)
+are converted/mapped at the `LibVlcVideoPlayable` boundary — the spec's 0–1
+`volume` maps `1.0` to 100 so it matches `<video>`, not libVLC's 200% boost.
+`object-fit` uses ScaleType against the **element** box
+(`setUseOrientationFromBounds(true)`), not the Activity portrait flag —
+otherwise VideoHelper swaps width/height in portrait and `contain` undersizes
+an embedded landscape view.
 
 ## Native packaging: two real failure modes, both solved
 

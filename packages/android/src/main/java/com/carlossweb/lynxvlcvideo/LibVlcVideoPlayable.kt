@@ -28,14 +28,13 @@
 //   spec's "buffered end position in seconds" is derived by multiplying
 //   against the known duration (0 for a live stream with unknown length,
 //   same case already handled for IPTV against <video>).
-// - Volume is an Int 0-200, not a Float 0-1 — converted at the boundary.
-// - videoScale (MediaPlayer.ScaleType) already covers object-fit natively
-//   (SURFACE_BEST_FIT/SURFACE_FIT_SCREEN/SURFACE_FILL) — no manual aspect
-//   ratio math needed. KNOWN ISSUE: on device, SURFACE_BEST_FIT ("contain")
-//   renders visibly smaller than the container instead of scaling up to
-//   fill it (see docs/TESTING.md) — not yet root-caused, likely a
-//   VLCVideoLayout measure/layout timing quirk rather than the ScaleType
-//   choice itself.
+// - Volume is an Int 0-100 at unity (100 = 0 dB). Values above 100 amplify;
+//   the spec's 0-1 range maps to 0-100 so volume=1.0 matches <video>.
+// - videoScale (MediaPlayer.ScaleType) maps object-fit (BEST_FIT / FIT_SCREEN
+//   / FILL). VideoHelper.updateVideoSurfaces() swaps width/height when the
+//   Activity is in portrait — that assumes a fullscreen VLCVideoLayout.
+//   Embedded boxes are often landscape inside a portrait Activity, so we
+//   call setUseOrientationFromBounds(true) and size against the element.
 package com.carlossweb.lynxvlcvideo
 
 import android.content.Context
@@ -43,7 +42,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.View
-import org.videolan.libvlc.LibVLC
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
@@ -52,8 +50,9 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
 
     private val videoLayout = VLCVideoLayout(context)
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val libVLC = LibVLC(context, arrayListOf("--no-drop-late-frames", "--no-skip-frames"))
-    private val player = MediaPlayer(libVLC)
+    private val playerLock = Any()
+    private val libVLC = SharedLibVlc.acquire(context)
+    private var player: MediaPlayer? = MediaPlayer(libVLC)
 
     @Volatile private var callback: LynxVideoPlayable.Callback? = null
     private var currentSrc: String? = null
@@ -61,6 +60,7 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     private var volume = 1.0f
     private var muted = false
     private var networkCachingMs = 0
+    private var objectFit: String = "contain"
     private var hasFiredFirstFrame = false
     private var isExplicitlyStopped = false
     private var suppressNextPlayingForLoop = false
@@ -70,10 +70,28 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     @Volatile private var cachedCurrentPositionMs = 0L
     @Volatile private var cachedIsPlaying = false
 
+    private val layoutListener = View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+        val w = right - left
+        val h = bottom - top
+        val oldW = oldRight - oldLeft
+        val oldH = oldBottom - oldTop
+        if (w > 0 && h > 0 && (w != oldW || h != oldH)) {
+            applyObjectFit(objectFit)
+        }
+    }
+
     init {
-        player.attachViews(videoLayout, null, true, false)
-        runOnMainThread { applyObjectFit("contain") }
-        player.setEventListener(::onVlcEvent)
+        val p = player
+        if (p != null) {
+            p.setUseOrientationFromBounds(java.lang.Boolean.TRUE)
+            p.attachViews(videoLayout, null, true, false)
+            p.setEventListener(::onVlcEvent)
+        }
+        videoLayout.addOnLayoutChangeListener(layoutListener)
+        runOnMainThread {
+            applyObjectFit(objectFit)
+            applyVolume()
+        }
     }
 
     private fun isOnMainThread() = Looper.myLooper() == mainHandler.looper
@@ -92,66 +110,75 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     }
 
     private fun refreshPlaybackSnapshot() {
-        cachedDurationMs = player.length.coerceAtLeast(0)
-        cachedCurrentPositionMs = player.time.coerceAtLeast(0)
-        cachedIsPlaying = player.isPlaying
+        val p = player
+        if (isReleased || p == null) return
+        cachedDurationMs = p.length.coerceAtLeast(0)
+        cachedCurrentPositionMs = p.time.coerceAtLeast(0)
+        cachedIsPlaying = p.isPlaying
     }
 
-    private fun <T> readPlayerState(cachedValue: T, read: () -> T): T =
-        if (!isReleased && isOnMainThread()) read() else cachedValue
+    private fun <T> readPlayerState(cachedValue: T, read: (MediaPlayer) -> T): T {
+        val p = player
+        return if (!isReleased && p != null && isOnMainThread()) read(p) else cachedValue
+    }
 
     private fun onVlcEvent(event: MediaPlayer.Event) {
-        if (isReleased) return
-        when (event.type) {
-            MediaPlayer.Event.Vout -> {
-                refreshPlaybackSnapshot()
-                if (!hasFiredFirstFrame && event.voutCount > 0) {
-                    hasFiredFirstFrame = true
+        synchronized(playerLock) {
+            if (isReleased || player == null) return
+            when (event.type) {
+                MediaPlayer.Event.Vout -> {
+                    refreshPlaybackSnapshot()
+                    if (isExplicitlyStopped) return
+                    if (!hasFiredFirstFrame && event.voutCount > 0) {
+                        hasFiredFirstFrame = true
+                        val durationMs = cachedDurationMs
+                        notifyCallback { onFirstFrame(durationMs) }
+                        runOnMainThread { applyObjectFit(objectFit) }
+                    }
+                }
+                MediaPlayer.Event.Buffering -> {
+                    refreshPlaybackSnapshot()
                     val durationMs = cachedDurationMs
-                    notifyCallback { onFirstFrame(durationMs) }
+                    val bufferedMs = if (durationMs > 0) (durationMs * (event.buffering / 100f)).toLong() else 0L
+                    notifyCallback { onBuffering(bufferedMs) }
                 }
-            }
-            MediaPlayer.Event.Buffering -> {
-                refreshPlaybackSnapshot()
-                val durationMs = cachedDurationMs
-                val bufferedMs = if (durationMs > 0) (durationMs * (event.buffering / 100f)).toLong() else 0L
-                notifyCallback { onBuffering(bufferedMs) }
-            }
-            MediaPlayer.Event.Playing -> {
-                refreshPlaybackSnapshot()
-                if (suppressNextPlayingForLoop) {
-                    suppressNextPlayingForLoop = false
-                } else {
-                    notifyCallback { onPlaying() }
+                MediaPlayer.Event.Playing -> {
+                    refreshPlaybackSnapshot()
+                    if (isExplicitlyStopped) return
+                    if (suppressNextPlayingForLoop) {
+                        suppressNextPlayingForLoop = false
+                    } else {
+                        notifyCallback { onPlaying() }
+                    }
                 }
-            }
-            MediaPlayer.Event.Paused -> {
-                refreshPlaybackSnapshot()
-                if (suppressNextPaused) {
-                    suppressNextPaused = false
-                } else if (!isExplicitlyStopped) {
-                    notifyCallback { onPaused() }
+                MediaPlayer.Event.Paused -> {
+                    refreshPlaybackSnapshot()
+                    if (suppressNextPaused) {
+                        suppressNextPaused = false
+                    } else if (!isExplicitlyStopped) {
+                        notifyCallback { onPaused() }
+                    }
                 }
-            }
-            MediaPlayer.Event.EndReached -> {
-                refreshPlaybackSnapshot()
-                if (loop) {
-                    notifyCallback { onLooped() }
-                    suppressNextPlayingForLoop = true
-                    suppressNextPaused = true
-                    runOnMainThread { restartForLoop() }
-                } else {
-                    notifyCallback { onEnded() }
+                MediaPlayer.Event.EndReached -> {
+                    refreshPlaybackSnapshot()
+                    if (loop) {
+                        notifyCallback { onLooped() }
+                        suppressNextPlayingForLoop = true
+                        suppressNextPaused = true
+                        runOnMainThread { restartForLoop() }
+                    } else {
+                        notifyCallback { onEnded() }
+                    }
                 }
-            }
-            MediaPlayer.Event.EncounteredError -> {
-                notifyCallback { onError(-1, "libVLC playback error") }
-            }
-            MediaPlayer.Event.TimeChanged -> {
-                refreshPlaybackSnapshot()
-                val current = cachedCurrentPositionMs
-                val durationMs = cachedDurationMs
-                notifyCallback { onTimeUpdate(current, durationMs) }
+                MediaPlayer.Event.EncounteredError -> {
+                    notifyCallback { onError(-1, "libVLC playback error") }
+                }
+                MediaPlayer.Event.TimeChanged -> {
+                    refreshPlaybackSnapshot()
+                    val current = cachedCurrentPositionMs
+                    val durationMs = cachedDurationMs
+                    notifyCallback { onTimeUpdate(current, durationMs) }
+                }
             }
         }
     }
@@ -159,8 +186,9 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     private fun restartForLoop() {
         // EndReached leaves libVLC's own Media detached — re-set it from the
         // stored src rather than assuming replay() is safe to call directly.
+        val p = player ?: return
         currentSrc?.let { setMediaFrom(it) }
-        player.play()
+        p.play()
     }
 
     fun getPlayerView(): View = videoLayout
@@ -174,21 +202,23 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     }
 
     private fun setMediaFrom(src: String) {
+        val p = player ?: return
         val media = buildMedia(src)
-        player.media = media
+        p.media = media
         media.release()
     }
 
     override fun setSrc(src: String?) {
         runOnMainThread {
+            val p = player ?: return@runOnMainThread
             currentSrc = src
             hasFiredFirstFrame = false
             isExplicitlyStopped = false
             suppressNextPlayingForLoop = false
-            player.stop()
+            p.stop()
             cachedCurrentPositionMs = 0
             if (src.isNullOrEmpty()) {
-                player.media = null
+                p.media = null
                 refreshPlaybackSnapshot()
                 return@runOnMainThread
             }
@@ -216,12 +246,13 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     }
 
     private fun applyVolume() {
+        val p = player ?: return
         val effective = if (muted) 0f else volume
-        player.volume = (effective * 200).toInt().coerceIn(0, 200)
+        p.volume = (effective * 100).toInt().coerceIn(0, 100)
     }
 
     override fun setSpeed(speed: Float) {
-        runOnMainThread { player.rate = speed.coerceIn(0.1f, 2.0f) }
+        runOnMainThread { player?.rate = speed.coerceIn(0.1f, 2.0f) }
     }
 
     override fun setObjectFit(objectFit: String?) {
@@ -229,46 +260,55 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     }
 
     private fun applyObjectFit(objectFit: String?) {
-        player.videoScale = when (objectFit) {
+        val p = player ?: return
+        this.objectFit = objectFit ?: "contain"
+        p.videoScale = when (this.objectFit) {
             "cover" -> MediaPlayer.ScaleType.SURFACE_FIT_SCREEN
             "fill" -> MediaPlayer.ScaleType.SURFACE_FILL
             else -> MediaPlayer.ScaleType.SURFACE_BEST_FIT
         }
+        p.updateVideoSurfaces()
     }
 
     override fun setNetworkCaching(caching: Int) {
         runOnMainThread {
             networkCachingMs = caching.coerceAtLeast(0)
-            // Only takes effect on the next Media — matches how xelement-video's
-            // own props apply "from the next relevant operation", not
-            // retroactively to an already-buffering connection.
-            currentSrc?.let { setMediaFrom(it) }
+            // Applied on the next Media rebuild (setSrc / play / loop). Rebuild
+            // now only when idle so a late mount prop still takes effect before
+            // the first play(); never replace player.media while playing.
+            val src = currentSrc
+            val p = player
+            if (src != null && p != null && !p.isPlaying) {
+                setMediaFrom(src)
+            }
         }
     }
 
     override fun play() {
         runOnMainThread {
+            val p = player ?: return@runOnMainThread
             isExplicitlyStopped = false
-            if (player.media == null && !currentSrc.isNullOrEmpty()) {
+            if (p.media == null && !currentSrc.isNullOrEmpty()) {
                 setMediaFrom(currentSrc!!)
             }
-            player.play()
+            p.play()
             refreshPlaybackSnapshot()
         }
     }
 
     override fun pause() {
         runOnMainThread {
-            player.pause()
+            player?.pause()
             refreshPlaybackSnapshot()
         }
     }
 
     override fun stop() {
         runOnMainThread {
+            val p = player ?: return@runOnMainThread
             isExplicitlyStopped = true
-            suppressNextPaused = suppressNextPaused || player.isPlaying
-            player.stop()
+            suppressNextPaused = suppressNextPaused || p.isPlaying
+            p.stop()
             cachedCurrentPositionMs = 0
             refreshPlaybackSnapshot()
             notifyCallback { onStopped() }
@@ -277,31 +317,32 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
 
     override fun seek(positionMs: Long) {
         runOnMainThread {
-            player.time = positionMs.coerceAtLeast(0)
+            val p = player ?: return@runOnMainThread
+            p.time = positionMs.coerceAtLeast(0)
             cachedCurrentPositionMs = positionMs
         }
     }
 
-    override fun getDuration(): Long = readPlayerState(cachedDurationMs) { player.length.coerceAtLeast(0) }
+    override fun getDuration(): Long = readPlayerState(cachedDurationMs) { it.length.coerceAtLeast(0) }
 
     override fun getCurrentPosition(): Long =
-        readPlayerState(cachedCurrentPositionMs) { player.time.coerceAtLeast(0) }
+        readPlayerState(cachedCurrentPositionMs) { it.time.coerceAtLeast(0) }
 
-    override fun isPlaying(): Boolean = readPlayerState(cachedIsPlaying) { player.isPlaying }
+    override fun isPlaying(): Boolean = readPlayerState(cachedIsPlaying) { it.isPlaying }
 
     override fun getAudioTracks(): List<LynxVideoPlayable.TrackInfo> =
-        readPlayerState(emptyList()) {
-            player.audioTracks?.map { LynxVideoPlayable.TrackInfo(it.id, it.name) } ?: emptyList()
+        readPlayerState(emptyList()) { p ->
+            p.audioTracks?.map { LynxVideoPlayable.TrackInfo(it.id, it.name) } ?: emptyList()
         }
 
-    override fun setAudioTrack(id: Int): Boolean = readPlayerState(false) { player.setAudioTrack(id) }
+    override fun setAudioTrack(id: Int): Boolean = readPlayerState(false) { it.setAudioTrack(id) }
 
     override fun getSubtitleTracks(): List<LynxVideoPlayable.TrackInfo> =
-        readPlayerState(emptyList()) {
-            player.spuTracks?.map { LynxVideoPlayable.TrackInfo(it.id, it.name) } ?: emptyList()
+        readPlayerState(emptyList()) { p ->
+            p.spuTracks?.map { LynxVideoPlayable.TrackInfo(it.id, it.name) } ?: emptyList()
         }
 
-    override fun setSubtitleTrack(id: Int): Boolean = readPlayerState(false) { player.setSpuTrack(id) }
+    override fun setSubtitleTrack(id: Int): Boolean = readPlayerState(false) { it.setSpuTrack(id) }
 
     override fun setCallback(callback: LynxVideoPlayable.Callback?) {
         this.callback = callback
@@ -310,12 +351,17 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     override fun release() {
         isReleased = true
         mainHandler.removeCallbacksAndMessages(null)
+        videoLayout.removeOnLayoutChangeListener(layoutListener)
         runOnMainThread(allowAfterRelease = true) {
-            player.setEventListener(null)
-            player.stop()
-            player.detachViews()
-            player.release()
-            libVLC.release()
+            synchronized(playerLock) {
+                val p = player ?: return@synchronized
+                p.setEventListener(null)
+                p.stop()
+                p.detachViews()
+                p.release()
+                player = null
+                SharedLibVlc.release()
+            }
         }
     }
 }

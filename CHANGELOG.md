@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Shared one process-wide `LibVLC` (refcount) across `<vlc-video>` elements;
+  each element still owns its own `MediaPlayer`.
+- `mode="queue"`/`"latest"`: `stop` preempts an in-flight `play`/`pause` so
+  a stalled IPTV `play()` can actually be stopped and retried.
+- Map `volume` 0–1 to libVLC 0–100 (unity), not 0–200.
+- Tear down the VLC event listener before releasing `MediaPlayer` so the
+  native event thread cannot JNI a destroyed player.
+- `network-caching` no longer replaces `player.media` while playing.
+- `object-fit` (`contain` / `cover` / `fill`) sizes against the element box
+  (`setUseOrientationFromBounds`), so `contain` no longer leaves a 16:9
+  picture floating inside the black frame on portrait devices.
+- Split consumer docs into short concept pages under `/docs` (quick start,
+  Android host, attributes, methods, events, object-fit, playback mode,
+  mithril). `SPEC.md` is replaced by those API pages.
+
 - Initial `<vlc-video>` element (`/packages/android`): full parity with
   `<video>`'s attribute/event/UIMethod contract, plus libVLC-only
   `network-caching`, `getAudioTracks`/`setAudioTrack`,
