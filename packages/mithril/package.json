@@ -1,0 +1,23 @@
+{
+  "name": "@carlos-sweb/lynx-vlc-video-mithril",
+  "version": "0.1.0",
+  "description": "Typed mithril-lynx bindings for <vlc-video>. The plain, functional wrapper is here; the polished player UI (controls, progress bar, track picker) is pending — see README.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "mithril-runtime": "^1.1.0"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.9",
+    "typescript": "~5.9.0"
+  },
+  "license": "Apache-2.0"
+}
