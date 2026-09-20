@@ -16,6 +16,8 @@
 - Split consumer docs into short concept pages under `/docs` (quick start,
   Android host, attributes, methods, events, object-fit, playback mode,
   mithril). `SPEC.md` is replaced by those API pages.
+- Re-attach libVLC video views when the host activity returns from the
+  background so the picture is not stuck black with audio still playing.
 
 - Initial `<vlc-video>` element (`/packages/android`): full parity with
   `<video>`'s attribute/event/UIMethod contract, plus libVLC-only

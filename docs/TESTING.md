@@ -103,6 +103,13 @@ Fix: `MediaPlayer.setUseOrientationFromBounds(true)` so portrait is
 layout and the first `Vout`. `contain` should touch at least one pair of
 edges; `cover` fills and may crop; `fill` stretches.
 
+## 6. Background / resume (black picture, audio still playing)
+
+Leaving the app (Home, WhatsApp, mail) destroys the TextureView surface.
+libVLC keeps decoding audio against a dead vout, so on return the box is
+black. `LibVlcVideoPlayable` now `detachViews()` on activity `onStop` and
+`attachViews()` on `onStart` (same pattern as VLC’s own Android apps).
+
 ## Reproducing this
 
 This repo's `/packages/android` module builds and packages cleanly on its

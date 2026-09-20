@@ -55,3 +55,4 @@ Raw (any Lynx JS runtime) is the same tag:
 - Changing `src` stops the previous item immediately.
 - Give the element a CSS size (the demo uses `.Video { width: 100%; height: 220px; }`). Without a height the black box can collapse.
 - Live IPTV often needs `network-caching` (milliseconds). `1500` is a reasonable first try.
+- Leaving the app and coming back used to leave a black picture with audio still playing. The native layer re-attaches the video surface on activity start.

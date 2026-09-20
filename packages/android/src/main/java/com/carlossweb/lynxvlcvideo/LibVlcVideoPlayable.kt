@@ -37,8 +37,12 @@
 //   call setUseOrientationFromBounds(true) and size against the element.
 package com.carlossweb.lynxvlcvideo
 
+import android.app.Activity
+import android.app.Application
 import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
@@ -69,6 +73,25 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     @Volatile private var cachedDurationMs = 0L
     @Volatile private var cachedCurrentPositionMs = 0L
     @Volatile private var cachedIsPlaying = false
+    private var viewsDetachedForBackground = false
+    private val hostActivity: Activity? = context.findActivity()
+
+    // TextureView is destroyed when the activity is no longer visible (user
+    // opened WhatsApp, etc.). Audio keeps playing; vout points at a dead
+    // surface → black picture. VLC's own apps detach on stop / attach on start.
+    private val activityLifecycleCallbacks = object : Application.ActivityLifecycleCallbacks {
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+        override fun onActivityResumed(activity: Activity) {
+            if (activity === hostActivity) handleHostStarted()
+        }
+        override fun onActivityPaused(activity: Activity) {}
+        override fun onActivityStopped(activity: Activity) {
+            if (activity === hostActivity) handleHostStopped()
+        }
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
+    }
 
     private val layoutListener = View.OnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
         val w = right - left
@@ -81,16 +104,39 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
     }
 
     init {
-        val p = player
-        if (p != null) {
-            p.setUseOrientationFromBounds(java.lang.Boolean.TRUE)
-            p.attachViews(videoLayout, null, true, false)
-            p.setEventListener(::onVlcEvent)
-        }
+        attachVideoViews()
+        player?.setEventListener(::onVlcEvent)
         videoLayout.addOnLayoutChangeListener(layoutListener)
+        hostActivity?.application?.registerActivityLifecycleCallbacks(activityLifecycleCallbacks)
         runOnMainThread {
             applyObjectFit(objectFit)
             applyVolume()
+        }
+    }
+
+    private fun attachVideoViews() {
+        val p = player ?: return
+        p.setUseOrientationFromBounds(java.lang.Boolean.TRUE)
+        p.attachViews(videoLayout, null, true, false)
+        viewsDetachedForBackground = false
+    }
+
+    private fun handleHostStopped() {
+        if (isReleased || viewsDetachedForBackground) return
+        val p = player ?: return
+        p.detachViews()
+        viewsDetachedForBackground = true
+    }
+
+    private fun handleHostStarted() {
+        if (isReleased || !viewsDetachedForBackground) return
+        // TextureView only has a SurfaceTexture after the window is focused
+        // (onResume). Binding in onStart leaves a live MediaPlayer with a
+        // dead vout — audio, black picture.
+        videoLayout.post {
+            if (isReleased || !viewsDetachedForBackground) return@post
+            attachVideoViews()
+            applyObjectFit(objectFit)
         }
     }
 
@@ -350,6 +396,7 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
 
     override fun release() {
         isReleased = true
+        hostActivity?.application?.unregisterActivityLifecycleCallbacks(activityLifecycleCallbacks)
         mainHandler.removeCallbacksAndMessages(null)
         videoLayout.removeOnLayoutChangeListener(layoutListener)
         runOnMainThread(allowAfterRelease = true) {
@@ -364,4 +411,13 @@ class LibVlcVideoPlayable(context: Context) : LynxVideoPlayable {
             }
         }
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
