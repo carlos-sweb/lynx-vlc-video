@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Rewrite install docs into a linear quick start; move maintainer publish
+  steps to `docs/publishing.md`.
 - Wire Maven Central publishing for the Android AAR
   (`io.github.carlos-sweb:lynx-vlc-video`, vanniktech maven-publish plugin).
 

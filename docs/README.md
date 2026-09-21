@@ -1,14 +1,15 @@
 # `<vlc-video>` docs
 
-Use these pages to add the element to an app. Contributor notes (how it is built, device logcat) stay in [ARCHITECTURE](ARCHITECTURE.md) and [TESTING](TESTING.md).
-
 | I want to… | Open |
 |---|---|
-| Play a stream as fast as possible | [Quick start](quick-start.md) |
-| Wire the Android host (Gradle, register, `libc++`) | [Android host](android-host.md) |
-| See every attribute | [Attributes](api-attributes.md) |
-| Call `play` / `pause` / `stop` / `seek` / tracks | [Methods](api-methods.md) |
-| Handle `playing`, `error`, `timeupdate`, … | [Events](api-events.md) |
-| Fill the black box (`contain` / `cover` / `fill`) | [object-fit](object-fit.md) |
-| Understand `mode="queue"` vs `direct` | [Playback mode](playback-mode.md) |
-| Use / publish the mithril npm helper | [mithril](mithril.md) |
+| **Install and play (start here)** | [Quick start](quick-start.md) |
+| Android Gradle details / `xelement` | [Android host](android-host.md) |
+| mithril `vlcVideo()` helper | [mithril](mithril.md) |
+| Attributes | [Attributes](api-attributes.md) |
+| `play` / `pause` / `stop` / `seek` / tracks | [Methods](api-methods.md) |
+| `playing`, `error`, `timeupdate`, … | [Events](api-events.md) |
+| `contain` / `cover` / `fill` | [object-fit](object-fit.md) |
+| `mode="queue"` vs `direct` | [Playback mode](playback-mode.md) |
+| Publish a release (maintainers) | [Publishing](publishing.md) |
+
+Contributor notes (internals, device logcat): [ARCHITECTURE](ARCHITECTURE.md), [TESTING](TESTING.md).
