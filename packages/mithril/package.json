@@ -1,6 +1,6 @@
 {
   "name": "@carlos-sweb/lynx-vlc-video-mithril",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Typed mithril-lynx bindings for the Lynx <vlc-video> element (libVLC).",
   "license": "MIT",
   "type": "module",
